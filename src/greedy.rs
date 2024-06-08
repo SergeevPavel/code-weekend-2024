@@ -1,8 +1,19 @@
-use crate::game::{GameState, MonsterId, MonsterState, Solver};
+use crate::game::{GameState, HeroState, MonsterId, MonsterState, Solver};
 use crate::task::Solution;
 
+#[derive(Debug)]
 pub struct GreedySolver {
-    // pub exp_reward: f32,
+    pub exp_mul: f32,
+    pub degrade_exp: bool,
+}
+
+impl Default for GreedySolver {
+    fn default() -> Self {
+        GreedySolver {
+            exp_mul: 1.0,
+            degrade_exp: false,
+        }
+    }
 }
 
 impl GreedySolver {
@@ -15,10 +26,21 @@ impl GreedySolver {
         let gold = m.gold as f32;
         let exp = m.exp as f32;
 
+        let speed_coeff = game_state.task.hero.level_speed_coeff as f32 / 100f32;
+        let power_coeff = game_state.task.hero.level_power_coeff as f32 / 100f32;
+        let range_coeff = game_state.task.hero.level_range_coeff as f32 / 100f32;
+        let lvl_coeff = (speed_coeff + power_coeff + range_coeff) / 3f32;
+
+        let exp_reward = exp / (HeroState::exp_for_lvl(game_state.hero.lvl + 1) as f32) * lvl_coeff;
+
         let steps = game_state.task.num_turns as f32;
         let progress = (game_state.steps() as f32) / steps;
 
-        let reward = exp * (1f32 - progress) + gold * progress;
+        let reward = if self.degrade_exp {
+            exp_reward * (1f32 - progress) * self.exp_mul + gold * progress
+        } else {
+            exp_reward * self.exp_mul + gold
+        };
         let fee = (approx_moves + approx_attacks) / steps;
 
         let priority = reward / fee;
@@ -27,12 +49,6 @@ impl GreedySolver {
         return (priority * 10000000f32) as i64
     }
 }
-
-// fn find_monster_to_move_to(game_state: &GameState) -> Option<MonsterId> {
-//     game_state.alive_monsters().min_by_key(|m| {
-//         m.p.dst_sqr(&game_state.hero.p)
-//     }).map(|m| m.id)
-// }
 
 impl Solver for GreedySolver {
     fn solve(&self, game_state: &mut GameState) -> Solution {

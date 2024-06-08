@@ -29,6 +29,11 @@ impl HeroState<'_> {
         }
     }
 
+    pub fn exp_before_next_lvl(&self) -> i32 {
+        let lvl_up_exp = Self::exp_for_lvl(self.lvl + 1);
+        lvl_up_exp - self.exp
+    }
+
     pub fn speed(&self) -> i32 {
         let base_speed = self.hero.base_speed;
         let lvl = self.lvl;
