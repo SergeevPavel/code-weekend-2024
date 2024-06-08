@@ -131,8 +131,18 @@ impl GameState<'_> {
         }
     }
 
-    pub fn alive_monsters(&self) -> impl Iterator<Item = &MonsterState> {
-        self.monsters.iter().filter(|m| m.hp != 0)
+    pub fn alive_monsters(&self) -> impl Iterator<Item = MonsterId> + '_ {
+        self.monsters.iter().filter_map(|m| {
+            if m.hp != 0 {
+                Some(m.id)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn steps(&self) -> i32 {
+        self.commands.len() as i32
     }
 
     pub fn is_game_over(&self) -> bool {
@@ -178,5 +188,5 @@ impl GameState<'_> {
 }
 
 pub trait Solver {
-    fn solve(game_state: &mut GameState) -> Solution;
+    fn solve(&self, game_state: &mut GameState) -> Solution;
 }
