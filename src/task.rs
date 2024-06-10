@@ -6,31 +6,35 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Hero {
-    pub base_speed: i32,
-    pub base_power: i32,
-    pub base_range: i32,
-    pub level_speed_coeff: i32,
-    pub level_power_coeff: i32,
-    pub level_range_coeff: i32,
+    pub base_speed: i64,
+    pub base_power: i64,
+    pub base_range: i64,
+    pub level_speed_coeff: i64,
+    pub level_power_coeff: i64,
+    pub level_range_coeff: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Monster {
-    pub x: i32,
-    pub y: i32,
-    pub hp: i32,
-    pub gold: i32,
-    pub exp: i32,
+    pub x: i64,
+    pub y: i64,
+    pub hp: i64,
+    pub gold: i64,
+    pub exp: i64,
+    #[serde(default)]
+    pub range: i64,
+    #[serde(default)]
+    pub attack: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Task {
     pub hero: Hero,
-    pub start_x: i32,
-    pub start_y: i32,
-    pub width: i32,
-    pub height: i32,
-    pub num_turns: i32,
+    pub start_x: i64,
+    pub start_y: i64,
+    pub width: i64,
+    pub height: i64,
+    pub num_turns: i64,
     pub monsters: Vec<Monster>
 }
 
@@ -40,8 +44,8 @@ pub enum Command {
     #[serde(rename = "move")]
     Move {
         comment: Option<String>,
-        target_x: i32,
-        target_y: i32,
+        target_x: i64,
+        target_y: i64,
     },
     #[serde(rename = "attack")]
     Attack {

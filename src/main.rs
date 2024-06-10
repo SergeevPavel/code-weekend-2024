@@ -20,7 +20,7 @@ fn hyper_search(test_id: u32) {
                 exp_mul: exp_mul,
             };
             let (game_state, solution) = solve_task(&task, &solver);
-            if game_state.score > best_result.as_ref().map_or(0, |g| g.score) {
+            if game_state.score >= best_result.as_ref().map_or(0, |g| g.score) {
                 best_result = Some(game_state);
                 best_solver = Some(solver);
                 best_solution = Some(solution);
@@ -39,7 +39,7 @@ fn solve_task<'a, 'b>(task: &'b Task, solver: &'a impl Solver) -> (GameState<'b>
 }
 
 fn main() {
-    for i in 1..=25 {
+    for i in 1..=50 {
         hyper_search(i)
     }
 }

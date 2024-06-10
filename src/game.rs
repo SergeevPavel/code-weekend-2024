@@ -2,23 +2,24 @@ use std::cmp::max;
 
 use crate::game::MoveError::{AttackOutOfRange, MonsterIsDead, MoveOutOfRange, OutOfField};
 use crate::geom::Point;
-use crate::task::{Command, Hero, Solution, Task};
+use crate::task::{Command, Hero, Monster, Solution, Task};
 
 
 #[derive(Debug, Clone)]
 pub struct HeroState<'a> {
     pub hero: &'a Hero,
     pub p: Point,
-    pub lvl: i32,
-    pub exp: i32,
+    pub lvl: i64,
+    pub exp: i64,
+    pub fatigue: i64,
 }
 
 impl HeroState<'_> {
-    pub fn exp_for_lvl(l: i32) -> i32 {
+    pub fn exp_for_lvl(l: i64) -> i64 {
         1000 + l * (l - 1) * 50
     }
 
-    pub fn add_exp(&mut self, exp: i32) {
+    pub fn add_exp(&mut self, exp: i64) {
         self.exp += exp;
         let lvl_up_exp = Self::exp_for_lvl(self.lvl + 1);
         if self.exp >= lvl_up_exp {
@@ -29,26 +30,26 @@ impl HeroState<'_> {
         }
     }
 
-    pub fn exp_before_next_lvl(&self) -> i32 {
+    pub fn exp_before_next_lvl(&self) -> i64 {
         let lvl_up_exp = Self::exp_for_lvl(self.lvl + 1);
         lvl_up_exp - self.exp
     }
 
-    pub fn speed(&self) -> i32 {
+    pub fn speed(&self) -> i64 {
         let base_speed = self.hero.base_speed;
         let lvl = self.lvl;
         let speed_coeff = self.hero.level_speed_coeff;
         base_speed + base_speed * lvl * speed_coeff / 100
     }
 
-    pub fn power(&self) -> i32 {
+    pub fn power(&self) -> i64 {
         let base_power = self.hero.base_power;
         let lvl = self.lvl;
         let power_coeff = self.hero.level_power_coeff;
         base_power + base_power * lvl * power_coeff / 100
     }
 
-    pub fn range(&self) -> i32 {
+    pub fn range(&self) -> i64 {
         let base_range = self.hero.base_range;
         let lvl = self.lvl;
         let range_coeff = self.hero.level_range_coeff;
@@ -57,21 +58,22 @@ impl HeroState<'_> {
 }
 
 #[derive(Debug, Clone)]
-pub struct MonsterState {
+pub struct MonsterState<'a> {
+    pub monster: &'a Monster,
     pub id: MonsterId,
     pub p: Point,
-    pub hp: i32,
-    pub gold: i32,
-    pub exp: i32,
+    pub hp: i64,
+    pub gold: i64,
+    pub exp: i64,
 }
 
 struct Reward {
-    gold: i32,
-    exp: i32
+    gold: i64,
+    exp: i64
 }
 
-impl MonsterState {
-    fn take_damage(&mut self, dmg: i32) -> MoveResult<Option<Reward>> {
+impl MonsterState<'_> {
+    fn take_damage(&mut self, dmg: i64) -> MoveResult<Option<Reward>> {
         if self.hp == 0 {
             return Err(MonsterIsDead)
         }
@@ -95,9 +97,9 @@ pub type MonsterId = usize;
 #[derive(Debug, Clone)]
 pub struct GameState<'a> {
     pub task: &'a Task,
-    pub score: i32,
+    pub score: i64,
     pub hero: HeroState<'a>,
-    pub monsters: Vec<MonsterState>,
+    pub monsters: Vec<MonsterState<'a>>,
     pub commands: Vec<Command>
 }
 
@@ -115,6 +117,7 @@ impl GameState<'_> {
     pub fn new<'a>(task: &'a Task) -> GameState<'a> {
         let monsters = task.monsters.iter().enumerate().map(|(m_id, m)| {
             MonsterState {
+                monster: m,
                 id: m_id,
                 p: Point::new(m.x, m.y),
                 hp: m.hp,
@@ -130,6 +133,7 @@ impl GameState<'_> {
                 p: Point::new(task.start_x, task.start_y),
                 lvl: 0,
                 exp: 0,
+                fatigue: 0,
             },
             monsters: monsters,
             commands: vec![],
@@ -146,15 +150,26 @@ impl GameState<'_> {
         })
     }
 
-    pub fn steps(&self) -> i32 {
-        self.commands.len() as i32
+    pub fn steps(&self) -> i64 {
+        self.commands.len() as i64
     }
 
     pub fn is_game_over(&self) -> bool {
-        (self.commands.len() as i32) >= self.task.num_turns
+        (self.commands.len() as i64) >= self.task.num_turns
     }
 
-    pub fn do_move(&mut self, x: i32, y: i32, comment: Option<String>) -> MoveResult<()> {
+    pub fn monsters_attack(&mut self) {
+        let mut fatigue = 0;
+        for m_id in self.alive_monsters() {
+            let m = &self.monsters[m_id];
+            if m.p.is_in_radius_of(&self.hero.p, m.monster.range) {
+                fatigue += m.monster.attack;
+            }
+        }
+        self.hero.fatigue += fatigue;
+    }
+
+    pub fn do_move(&mut self, x: i64, y: i64, comment: Option<String>) -> MoveResult<()> {
         if x < 0 || y < 0 || x > self.task.width || y > self.task.height {
             return Err(OutOfField)
         }
@@ -168,6 +183,7 @@ impl GameState<'_> {
             target_x: x,
             target_y: y,
         });
+        self.monsters_attack();
         Ok(())
     }
 
@@ -176,18 +192,23 @@ impl GameState<'_> {
         self.monsters[target_id].p.is_in_radius_of(&self.hero.p, range)
     }
 
+    fn gold_to_score(&self, gold: i64) -> i64 {
+        (gold * 1000) / (1000 + self.hero.fatigue)
+    }
+
     pub fn do_attack(&mut self, target_id: MonsterId, comment: Option<String>) -> MoveResult<()> {
         if !self.can_attack(target_id) {
             return Err(AttackOutOfRange)
         }
         if let Some(reward) = self.monsters[target_id].take_damage(self.hero.power())? {
             self.hero.add_exp(reward.exp);
-            self.score += reward.gold;
+            self.score += self.gold_to_score(reward.gold);
         }
         self.commands.push(Command::Attack {
             comment: comment,
             target_id: target_id,
         });
+        self.monsters_attack();
         Ok(())
     }
 }
